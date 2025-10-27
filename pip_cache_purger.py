@@ -7,6 +7,7 @@ import ctypes
 import shutil
 import subprocess
 import traceback
+import platform
 
 def is_admin():
     try:
@@ -19,6 +20,7 @@ def relaunch_as_admin():
     res = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, params, None, 1)
     if int(res) <= 32:
         raise RuntimeError(f"ShellExecuteW failed with code {res}")
+    os._exit(0)
 
 def clear_directory_contents(path):
     path = os.path.abspath(path)
@@ -47,6 +49,33 @@ def remove_matching_dirs_under(root_path, dir_names):
                     print(f"[CACHE] Removed: {target}")
                 except Exception as e:
                     print(f"[ERR] {target}: {e}")
+
+def clean_broken_distributions(root_path):
+    if not os.path.isdir(root_path):
+        return
+    if platform.system() == "Windows":
+        site_packages = os.path.join(root_path, "Lib", "site-packages")
+    else:
+        site_packages = os.path.join(
+            root_path, "lib",
+            f"python{sys.version_info.major}.{sys.version_info.minor}",
+            "site-packages"
+        )
+    if not os.path.isdir(site_packages):
+        return
+    print(f"[CLEAN BROKEN] Checking: {site_packages}")
+    for entry in os.listdir(site_packages):
+        if entry.startswith("~"):
+            path = os.path.join(site_packages, entry)
+            try:
+                if os.path.isdir(path):
+                    shutil.rmtree(path)
+                    print(f"[CLEAN BROKEN] Deleted broken directory: {path}")
+                else:
+                    os.remove(path)
+                    print(f"[CLEAN BROKEN] Deleted broken file: {path}")
+            except Exception as e:
+                print(f"[ERR] Failed to delete {path}: {e}")
 
 def run_pip_cache_purge_with_python(python_exe):
     if not os.path.isfile(python_exe):
@@ -98,7 +127,6 @@ def main():
         r"C:\ProgramData\anaconda3",
     ]
 
-    user_cache = os.path.join(os.environ["LOCALAPPDATA"], "pip", "cache")
     print(f"\n[USER CACHE] {user_cache}")
     clear_directory_contents(user_cache)
 
@@ -125,6 +153,7 @@ def main():
         python_exe = os.path.join(p, "python.exe")
         run_pip_cache_purge_with_python(python_exe)
         remove_matching_dirs_under(p, {"cache", "__pycache__"})
+        clean_broken_distributions(p)
 
     for c in conda_installs:
         print(f"\n[CONDA INSTALL] {c}")
@@ -148,6 +177,7 @@ def main():
                 except Exception:
                     pass
         remove_matching_dirs_under(c, {"cache", "__pycache__"})
+        clean_broken_distributions(c)
 
     if getattr(sys, "frozen", False):
         try:
