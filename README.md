@@ -1,5 +1,6 @@
 ## pip cache purger
 
+
 * pip_cache_purger clears the cache from all Python and Conda distributions installed.
 
 * pip_venv_cache_purger identifies if there's a Python Virtual Environment in the current working directory and it clears the cache of that environment.
